@@ -65,6 +65,9 @@ class Character:
         # Platform Collision Check
         self.check_platforms(platforms)
 
+        if not self.is_player and self != enemy2: #ignores platforms for bat!!!
+            self.check_platforms(platforms)
+
         # Prevent falling below the bottom of the screen
         if self.rect.bottom >= height - 5:
             self.on_platform = True
@@ -77,6 +80,21 @@ class Character:
 
         # Check for candle collisions
         self.check_candle_collision(candles)
+
+    def fly_toward_player(self,player_rect):
+        # Move towards the player's position
+        direction_x = player_rect.x - self.rect.x
+        direction_y = player_rect.y - self.rect.y
+
+        # Normalize the movement to ensure smooth, diagonal movement if needed
+        distance = (direction_x ** 2 + direction_y ** 2) ** 0.5
+        if distance != 0:
+            direction_x /= distance
+            direction_y /= distance
+
+        # Set the bat's velocity towards the player, but at a slow pace
+        self.velocity_x = direction_x * 2  # Adjust the speed as needed
+        self.velocity_y = direction_y * 2
 
     def check_platforms(self, platforms):
         # Check if the player is colliding with any platforms
@@ -113,6 +131,8 @@ class Character:
                     candles.remove(candle)  # Remove the candle
                     score += 1  # Increase the score
                     print("Candle collected!")
+                    if score == 6:
+                        print("All candles collected!")
 
     def check_boundaries(self):
         # Horizontal Boundaries (left and right)
@@ -150,8 +170,8 @@ class Character:
     def handle_enemies(self, player_rect):  # Handles Enemies movement
         if self.is_chasing:
             self.chase_player(player_rect)
-        else:
-            self.patrol()
+        elif self == enemy2:
+            self.fly_toward_player(player_rect)
 
     def chase_player(self, player_rect):
         if self.rect.x < player_rect.x:
@@ -210,7 +230,7 @@ def spawn_candles(num_candles, min_distance=50):
 player = Character('sprite.png', 60, 745, is_player=True)
 enemy1 = Character('ghostsprite2.png', 650, 745, is_player=False)
 enemy1.is_chasing = True
-enemy2 = Character('bat2.png', 305, 150, is_player=False)
+enemy2 = Character('bat2.png', 700, 161, is_player=False)
 enemy2.is_chasing = False
 
 # Score tracking
@@ -285,6 +305,10 @@ while running:
     screen.blit(player.image, player.rect)
     screen.blit(enemy1.image, enemy1.rect)
     screen.blit(enemy2.image, enemy2.rect)
+
+    pygame.display.flip()
+    clock.tick(60)
+
 
     pygame.display.flip()
     clock.tick(60)
