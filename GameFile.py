@@ -1,16 +1,43 @@
+
 import pygame, sys, random
 from pygame.locals import *
 pygame.init()
+pygame.mixer.init()
 
 # Game Setup
 clock = pygame.time.Clock()
 width = 750
 height = 750
 screen = pygame.display.set_mode((width, height))
+gameOver = False
+gameWon = False
 
 # Background Setup
 background = pygame.image.load("background.png")
 background = pygame.transform.scale(background, (width, height))
+
+# Sounds
+enemy_collision = pygame.mixer.Sound('hit noise.wav')
+collect_candle = pygame.mixer.Sound('candle_collect.wav')
+winGame = pygame.mixer.Sound('win.mp3')
+loseGame = pygame.mixer.Sound('lose.wav')
+pygame.mixer.music.load('Ian Post - Super Duper.mp3')
+fade_duration = 3000 #fade in/fade out
+win_sound_played = False
+lose_sound_played = False
+
+def play_bgm():
+    pygame.mixer.music.play(loops=-1, start=1.2)
+
+def fade_out_bgm():
+    pygame.mixer.music.fadeout(2000)
+
+def lower_bgm_volume():
+    pygame.mixer.music.set_volume(0)
+
+def restore_bgm_volume():
+    pygame.mixer.music.set_volume(1.0)
+play_bgm()
 
 # Font Setup for Text (smaller font size)
 font = pygame.font.Font(None, 20)  # Reduced the font size
@@ -22,6 +49,8 @@ class Character:
         self.rect = self.image.get_rect()
         self.rect.x = x
         self.rect.y = y
+        self.initial_x = x #reset
+        self.initial_y = y #reset
 
         # Attributes
         self.on_platform = False  # Confirms that character isn't on platform
@@ -121,7 +150,7 @@ class Character:
                     self.health -= 0.1  # Reduce health every frame player collides with an enemy
                     if self.health <= 0:
                         print("Player died!")
-                        # You could add code to reset the game or end it here.
+                    enemy_collision.play() #plays collision sound
 
     def check_candle_collision(self, candles):
         global score
@@ -131,8 +160,10 @@ class Character:
                     candles.remove(candle)  # Remove the candle
                     score += 1  # Increase the score
                     print("Candle collected!")
+                    collect_candle.play()
                     if score == 6:
                         print("All candles collected!")
+
 
     def check_boundaries(self):
         # Horizontal Boundaries (left and right)
@@ -226,6 +257,37 @@ def spawn_candles(num_candles, min_distance=50):
 
     return candles
 
+#Game Over!
+def show_end_screen():
+    screen.fill((0, 0, 0))  # Fill the screen with a solid color for the end screen background
+
+    # Render "Game Over" text
+    game_over_text = pygame.font.Font(None, 74).render("Game Over", True, (255, 0, 0))
+    text_rect = game_over_text.get_rect(center=(width // 2, height // 2 - 50))
+    screen.blit(game_over_text, text_rect)
+
+    # Render "Press R to Restart" text
+    restart_text = pygame.font.Font(None, 36).render("Press R to Restart", True, (255, 255, 255))
+    restart_text_rect = restart_text.get_rect(center=(width // 2, height // 2 + 50))
+    screen.blit(restart_text, restart_text_rect)
+
+    pygame.display.flip()  # Update the display
+
+def show_win_screen():
+    screen.fill((0, 0, 0))  # Fill the screen with a solid color for the end screen background
+
+    # Render "You win!" text
+    game_won_text = pygame.font.Font(None, 74).render("You win!", True, (255, 0, 0))
+    text_rect = game_won_text.get_rect(center=(width // 2, height // 2 - 50))
+    screen.blit(game_won_text, text_rect)
+
+    # Render "Press R to Restart" text
+    restart_text = pygame.font.Font(None, 36).render("Press R to Restart", True, (255, 255, 255))
+    restart_text_rect = restart_text.get_rect(center=(width // 2, height // 2 + 50))
+    screen.blit(restart_text, restart_text_rect)
+
+    pygame.display.flip()
+
 # Characters
 player = Character('sprite.png', 60, 745, is_player=True)
 enemy1 = Character('ghostsprite2.png', 650, 745, is_player=False)
@@ -272,6 +334,51 @@ while running:
         if keys[pygame.K_ESCAPE]:
             sys.exit(1)
 
+        if pygame.mixer.music.get_busy():
+            current_position = pygame.mixer.music.get_pos()  # Get the current position of the music in ms
+
+            if current_position >= 28000:  # 30 seconds after 1.2 seconds
+                fade_out_bgm()  # Fade out
+
+        if not pygame.mixer.music.get_busy():
+            play_bgm()
+
+#Game Functionality
+        if (gameOver or gameWon) and event.type == KEYDOWN and event.key == pygame.K_r:
+            gameOver = False
+            gameWon = False
+            player.health = player.max_health  # Reset player's health
+            score = 0  # Reset the score
+            candles = spawn_candles(6)  # Respawn candles
+            player.rect.x = player.initial_x
+            player.rect.y = player.initial_y
+            enemy1.rect.x = enemy1.initial_x
+            enemy1.rect.y = enemy1.initial_y
+            enemy2.rect.x = enemy2.initial_x
+            enemy2.rect.y = enemy2.initial_y
+            restore_bgm_volume()
+            win_sound_played = False
+            lose_sound_played = False
+
+    if gameOver:
+        if not lose_sound_played:
+            lower_bgm_volume()
+            print("Playing lose sound") #Debug Debug
+            loseGame.play()
+            lose_sound_played = True
+        show_end_screen()  # Show end screen if gameOver is True
+        continue  # Skip the rest of the loop
+
+
+    elif gameWon:
+        if not win_sound_played:
+            lower_bgm_volume()
+            winGame.play()
+            win_sound_played = True
+        show_win_screen()  # Display the win screen
+        continue
+
+
     screen.blit(background, (0, 0))
 
     # Update Characters
@@ -306,9 +413,12 @@ while running:
     screen.blit(enemy1.image, enemy1.rect)
     screen.blit(enemy2.image, enemy2.rect)
 
-    pygame.display.flip()
-    clock.tick(60)
+    # Game over
+    if player.health <= 0:
+        gameOver = True
 
+    if score >= 6:
+        gameWon = True
 
     pygame.display.flip()
     clock.tick(60)
